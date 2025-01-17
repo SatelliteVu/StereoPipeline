@@ -27,32 +27,37 @@
 #include <string>
 
 // Forward declarations
-namespace vw {
-  namespace cartography {
+namespace vw
+{
+  namespace cartography
+  {
     class GeoReference;
   }
   class GdalWriteOptions;
 }
 
-namespace asp {
+namespace asp
+{
 
-// Given an image pixel, trace a ray to the ground and find the intersection.
-void queryPixel(std::string const& dem_file, vw::CamPtr camera_model,
-                vw::Vector2 const& query_pixel);
+  // Given an image pixel, trace a ray to the ground and find the intersection
+  vw::Vector3 queryPixel(std::string const &dem_file, vw::CamPtr camera_model,
+                         vw::Vector2 const &query_pixel);
 
+  // Process multiple pixels in batch
+  std::vector<vw::Vector3> queryPixels(std::string const &dem_file, vw::CamPtr camera_model,
+                                       const std::vector<vw::Vector2> &query_pixels);
 
-// Prepare a DEM file that encompasses a given image and with a given height,
-// or reuse the one already available if agrees with what is intended.
-void setupOrCheckDem(vw::GdalWriteOptions const& options,
-                     vw::ImageViewRef<float> img,
-                     vw::cartography::GeoReference const& image_georef,
-                     std::string const& tag, 
-                     std::string const& out_prefix, 
-                     double dem_height,
-                     // Outputs
-                     std::string & dem_path);
+  // Prepare a DEM file that encompasses a given image and with a given height,
+  // or reuse the one already available if agrees with what is intended.
+  void setupOrCheckDem(vw::GdalWriteOptions const &options,
+                       vw::ImageViewRef<float> img,
+                       vw::cartography::GeoReference const &image_georef,
+                       std::string const &tag,
+                       std::string const &out_prefix,
+                       double dem_height,
+                       // Outputs
+                       std::string &dem_path);
 
-} //end namespace asp
+} // end namespace asp
 
-#endif//__CORE_DEM_UTILS_H__
-
+#endif //__CORE_DEM_UTILS_H__
