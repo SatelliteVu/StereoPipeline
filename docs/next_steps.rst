@@ -372,8 +372,8 @@ option of ``parallel_stereo`` can be used. See
 
 .. _mapproj-example:
 
-Running stereo with mapprojected images
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Stereo with mapprojected images
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The way stereo correlation works is by matching a neighborhood of each
 pixel in the left image to a similar neighborhood in the right image.
@@ -480,18 +480,21 @@ can experiment on a clip with values of 5 and 10 for sigma, for example.
 
 .. _mapproj-res:
 
-Resolution of mapprojection
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Grid size and projection
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-*It is very important to specify the same resolution* (ground sample
-distance) when mapprojecting the images (option ``--tr`` for
-``mapproject``, :numref:`mapproject`), in order for the images to have
-the same scale and avoid big search range issues later in correlation.
+It is very important to specify the *same* grid size (ground sample distance)
+and projection string when mapprojecting the images (options ``--tr`` and
+``--t_srs`` for ``mapproject``, :numref:`mapproject`), to avoid big search range
+issues later in correlation.
 
 Normally, ``mapproject`` is rather good at auto-guessing the resolution,
 so this tool can be invoked with no specification of the resolution 
 for the left image, then then ``gdalinfo`` can be used to find
 the obtained pixel size, and that value can be used with the right image.
+
+In the latest build ASP, these quantities can be borrowed from the first 
+image with the option ``--ref-map`` (:numref:`mapproj_refmap`).
 
 Invoking ``mapproject`` with the ``--query-projection`` option will print the
 estimated ground sample distance (output pixel size) without doing the
@@ -586,16 +589,21 @@ Next, we mapproject the left image onto this DEM with the the ``mapproject`` pro
        left.cub left_proj.tif
 
 The resolution of mapprojection is automatically determined, and can be later
-inspected with ``gdalinfo`` (:numref:`gdal_tools`). 
+inspected with ``gdalinfo`` (:numref:`gdal_tools`). The projection may be
+auto-determined as well (:numref:`mapproj_auto_proj`).
 
-*It is very important to use the same resolution for mapprojecting the right
-image* (:numref:`mapproj-res`), and to adjust the resolution below (``--tr``),
-and also likely the projection (``--t_srs``).
+It is very important to use the *same resolution and projection* for
+mapprojecting the right image (:numref:`mapproj-res`), and to adjust these
+below (``--tr`` and ``--t_srs``).
 
-:: 
+In the latest builds of ASP, ``mapproject`` can borrow the resolution and
+projection for the right image from the left one that was already mapprojected,
+with the ``--ref-map`` option::
 
-     mapproject --tr 1.0 run_nomap/run-smooth.tif \
-       right.cub right_proj.tif
+     mapproject                 \
+       --ref-map left_proj.tif  \
+       run_nomap/run-smooth.tif \
+       right.cub right_proj.tif 
 
 Next, we do stereo with these mapprojected images, with the mapprojection
 DEM as the last argument::
@@ -731,9 +739,14 @@ Mapprojection commands::
       right_mapproj.tif
 
 If the ``--t_srs`` option is not specified, the projection string will be read
-from the low-resolution input DEM.
+from the low-resolution input DEM, unless the DEM is in a geographic projection,
+when a projection in meters will be found (:numref:`mapproj_auto_proj`). See
+:numref:`mapproj_refmap` for how to ensure both images share the same projection
+and grid size.
 
-The zone of the UTM projection depends on the location of the images.
+The zone of the UTM projection depends on the location of the images. Hence, if
+not relying on projection auto-determination, the zone should be set
+appropriately.
 
 The complete list of options for ``mapproject`` is described in
 :numref:`mapproject`.
@@ -887,28 +900,50 @@ An example without mapprojected images is shown in :numref:`bathy_reuse_run`.
 Stereo with ortho-ready images
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Some vendors offer images that have been projected onto surfaces 
-of constant height above a datum. Examples are Maxar's OR2A product
-and the Airbus Pleiades ortho product (:numref:`pleiades_projected`).
+Some vendors offer images that have been projected onto surfaces of constant
+height above a datum. Examples are Maxar's OR2A product and the Airbus Pleiades
+ortho product (:numref:`pleiades_projected`).
 
-The stereo command for Maxar (DigitalGlobe) data is::
+The processing of such  images is as follows. First, a clip could be cut from each,
+if needed, with ``gdal_translate -projwin`` (:numref:`gdal_tools`).
 
-    parallel_stereo                  \
-      -t dg                          \
-      --stereo-algorithm asp_mgm     \
-      --ortho-heights 23.5 27.6      \
-      left_ortho.tif right_ortho.tif \
-      left.xml right.xml             \
+Inspect the pixel size (GSD) of the two ortho images. It is strongly suggested to bring them
+to the same pixel size, which should be intermediate between the original images,
+with a command such as::
+
+  gdalwarp -r cubicspline -overwrite -tr 0.4 0.4 \ 
+    left_ortho.tif left_regrid.tif 
+
+and the same for the right image. Otherwise the results of stereo will be not great.
+
+The orthoimages must have the same projection, in units of meters (such as UTM).
+If these are different, the desired projection string can be added to the ``gdalwarp``
+command above via the option ``-t_srs``.
+ 
+The stereo command for Maxar (DigitalGlobe) data with linescan (exact) cameras
+is::
+
+    parallel_stereo                    \
+      -t dg                            \
+      --stereo-algorithm asp_mgm       \
+      --ortho-heights 23.5 27.6        \
+      left_regrid.tif right_regrid.tif \
+      left.xml right.xml               \
       run/run
 
 The values passed in via ``--ortho-heights`` are the heights above the
 datum that were used to mapproject the images. The datum is read from the
-geoheader of the images.
+geoheader of the images. The heights should be looked up in the metadata.
 
-For Pleiades data and RPC cameras use instead ``-t rpc``.
+Maxar may ship such data with RPC cameras only. Then, use above ``-t rpc``.
+The heights are found in the ``<TERRAINHAE>`` field in each XML camera model.
 
-Helper DEMs with such heights are created in the output directory, then the
-usual workflow of stereo with mapprojected images takes place.
+For Pleiades data and RPC cameras use instead ``-t rpc``. How to find
+the heights is mentioned in :numref:`pleiades_projected`.
+
+After stereo, ``point2dem`` (:numref:`point2dem`) is run as usual. It is
+suggested to inspect the triangulation error created by that program, and to
+compare with a prior terrain, such as obtained as in :numref:`initial_terrain`.
 
 .. _diagnosing_problems:
 
