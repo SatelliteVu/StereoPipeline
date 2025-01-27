@@ -23,9 +23,11 @@
 #include <asp/Sessions/StereoSessionFactory.h>
 #include <asp/Core/BundleAdjustUtils.h>
 #include <asp/Camera/RPCModel.h>
+#include <asp/Camera/CsmModel.h>
 #include <asp/Core/AspStringUtils.h>
 #include <asp/Core/ImageUtils.h>
 #include <asp/Core/BaseCameraUtils.h>
+#include <asp/IsisIO/IsisCameraModel.h>
 
 #include <vw/Core/Exception.h>
 #include <vw/Core/Log.h>
@@ -288,17 +290,41 @@ bool StereoSession::have_datum() const {
 vw::cartography::Datum StereoSession::get_datum(const vw::camera::CameraModel* cam,
                                                 bool use_sphere_for_non_earth) const {
   
-
   if (!stereo_settings().datum.empty()) 
     return vw::cartography::Datum(stereo_settings().datum);
+
+  // For ISIS, can query the camera. This code is invoked for stereo with
+  // mapprojected ISIS cameras, as that use the mapprojected session, and not
+  // the ISIS one. In the latter case the ISIS session has this own
+  // implementation of this function.
+  vw::camera::IsisCameraModel const* isis_cam 
+    = dynamic_cast<vw::camera::IsisCameraModel const*>(unadjusted_model(cam));
+  if (isis_cam != NULL) 
+    return isis_cam->get_datum_isis(use_sphere_for_non_earth);
+
+  // Do same for csm
+  asp::CsmModel const* csm_cam 
+    = dynamic_cast<asp::CsmModel const*>(unadjusted_model(cam));
+  if (csm_cam != NULL)
+    return csm_cam->get_datum_csm("unknown", use_sphere_for_non_earth);
   
+  // Same for RPC
+  asp::RPCModel const* rpc_cam
+     = dynamic_cast<const asp::RPCModel*>(vw::camera::unadjusted_model(cam));
+  if (rpc_cam != NULL) 
+     return rpc_cam->datum();  
+  
+  // TODO(oalexan1): Need to find a systematic way of handling all
+  // these cases.
+      
   // Otherwise guess the datum based on the camera position.
   // If no luck, it will return the default WGS84 datum.
+  // TODO(oalexan1): This may result in a bad datum for other planets.
   double cam_center_radius 
       = norm_2(cam->camera_center(vw::Vector2()));
   vw::cartography::Datum datum;
   asp::guessDatum(cam_center_radius, datum);
-    
+   
   return datum;
 }
 
@@ -325,8 +351,9 @@ vw::cartography::GeoReference StereoSession::get_georef() {
 
   // Sanity check
   if (has_georef && has_datum) {
-    // For pinhole the guessed datum may be unreliable, so warn only
-    bool warn_only = (this->name().find("pinhole") != std::string::npos);
+    // This check is very important, as it prevents a mixup of datums from 
+    // different planets. The guessed datum may be unreliable, so always warn only. 
+    bool warn_only = true;
     vw::checkDatumConsistency(georef.datum(), datum, warn_only);
   }
   

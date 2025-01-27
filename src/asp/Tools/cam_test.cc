@@ -44,14 +44,12 @@ using namespace vw::cartography;
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
-
-struct Options : vw::GdalWriteOptions {
+struct Options: vw::GdalWriteOptions {
   std::string image_file, cam1_file, cam2_file, session1, session2, bundle_adjust_prefix,
   cam1_bundle_adjust_prefix, cam2_bundle_adjust_prefix, datum;
-  int sample_rate; // use one out of these many pixels
+  int sample_rate;
   double subpixel_offset, height_above_datum;
-  bool print_per_pixel_results, aster_use_csm, aster_vs_csm,
-    test_error_propagation;
+  bool print_per_pixel_results, aster_use_csm, aster_vs_csm, test_error_propagation;
   vw::Vector2 single_pixel;
 
   Options() {}
@@ -308,10 +306,12 @@ void run_cam_test(Options & opt) {
           << "the datum semi-major axis. Check your data. Consider using "
           << "the --datum and/or --height-above-datum options.\n"; 
 
-  if (opt.session1 == opt.session2 && (default_session1 == "" || default_session2 == ""))
-    vw_throw(ArgumentErr() << "The session names for both cameras "
+  if (opt.session1 == opt.session2 && (default_session1 == "" || default_session2 == "") &&
+     (opt.session1 == "dg"))
+    vw::vw_out(vw::WarningMessage) << "The session names for both cameras "
               << "were guessed as: '" << opt.session1 << "'. It is suggested that they be "
-              << "explicitly specified using --session1 and --session2.\n");
+              << "explicitly specified using --session1 and --session2, as a DigitalGlobe "
+              << "camera file may contain both exact linescan and RPC cameras.\n";
 
   // Sanity checks for RPC cameras
   if (opt.session1 == "rpc")

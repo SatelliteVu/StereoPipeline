@@ -32,6 +32,8 @@ supported as well (:numref:`sat_sim_linescan`). Lens distortion is not modeled.
 
 Several use cases are below. 
 
+.. _sat_sim_prior:
+
 Use given cameras
 ^^^^^^^^^^^^^^^^^
 ::
@@ -58,6 +60,8 @@ To see how a created image projects onto the ground, run ``mapproject``
       camera.map.tif
 
 The images can be overlaid in ``stereo_gui`` (:numref:`stereo_gui`).
+
+A perturbation can be apply to given cameras (:numref:`sat_sim_perturb`).
 
 .. _sat_sim_nadir:
 
@@ -318,9 +322,11 @@ specify it as::
 Here we used an approximation of :math:`\pi/2` radians, which is 90 degrees,
 for the 45 Hz frequency, and 0 radians for the 100 Hz frequency. 
 
-The values can also be separatedy by commas, without spaces, then the quotes are
+The values can also be separated by commas, without spaces, then the quotes are
 not necessary. See :numref:`sat_sim_options` for more information on these
 options.
+
+Jitter can be applied to existing cameras as well (:numref:`sat_sim_perturb`). 
 
 A useful test is compare a camera without jitter with the corresponding one with
 jitter.  For that, project a pixel from the first camera to the datum, and
@@ -544,6 +550,39 @@ and nearby times are positive but not too large, which can result in loss of pre
 
 Here we also assumed a rig was present (:numref:`sat_sim_rig`), with the sensor
 name being ``my_cam``.
+
+.. _sat_sim_perturb:
+
+Perturbing existing cameras
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This program can apply a jitter perturbation (:numref:`sat_sim_jitter_model`)
+to a sequence of given Pinhole cameras (:numref:`pinholemodels`).
+
+If more than one sequence is present, such as nadir-looking and forward-looking
+cameras, ``sat_sim`` should be called separately for each one.
+
+In this mode, no images are generated and no rig can be used.
+
+Example::
+
+    ls nadir_cameras/*tsai > camera_list.txt
+    
+    sat_sim                            \
+      --perturb-cameras                \
+      --camera-list camera_list.txt    \
+      --dem dem.tif                    \
+      --velocity 7500                  \
+      --jitter-frequency 5             \
+      --horizontal-uncertainty '0 2 0' \
+      -o run/run
+
+If an input image is named ``camDir/camName.tsai`` and the output prefix is
+``run/run``, the output camera will be saved as ``run/run-camName.tsai``.
+
+The list of written cameras is saved in a file named ``run/run-cameras.txt``.
+That list can be passed to ``bundle_adjust`` (:numref:`bundle_adjust`) and
+``jitter_solve`` (:numref:`jitter_solve`).
 
 .. _roll_pitch_yaw_def:
 
@@ -839,12 +878,15 @@ Command-line options
 --model-time
     Model time at each camera position (:numref:`sat_sim_time`). See also
     ``--reference-time``.
-    
+
 --reference-time <double (default: 10000.0)>
     The measured time, in seconds, when the satellite is along given orbit, in nadir
     orientation, with the center view direction closest to the ground point at
     ``--first-ground-pos``. A unique value for each orbit is suggested. A large value
     (millions), may result in numerical issues. See :numref:`sat_sim_time`.
+
+--perturb-cameras
+    Apply a perturbation to existing cameras (:numref:`sat_sim_perturb`).
 
 --blur-sigma <double (default: 0.0)>
     When creating images, blur them with a Gaussian with this sigma. The sigma is

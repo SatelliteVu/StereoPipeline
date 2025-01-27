@@ -69,15 +69,15 @@ void handle_arguments(int argc, char *argv[], asp::MapprojOptions& opt) {
      "Display the computed projection information and estimated ground sample distance (pixel size on the ground), and quit. Used by the mapproject script.")
     ("session-type,t", po::value(&opt.stereo_session),
      "Select the stereo session type to use for processing. Usually the program can select this automatically by the file extension, except for xml cameras. See the doc for options.")
-    ("t_projwin", po::value(&opt.target_projwin),
+    ("t_projwin",        po::value(&opt.target_projwin),
      "Limit the mapprojected image to this region, with the corners given in georeferenced coordinates (xmin ymin xmax ymax). Max is exclusive.")
-    ("t_pixelwin", po::value(&opt.target_pixelwin),
+    ("t_pixelwin",       po::value(&opt.target_pixelwin),
      "Limit the mapprojected image to this region, with the corners given in pixels (xmin ymin xmax ymax). Max is exclusive.")
     ("bundle-adjust-prefix", po::value(&opt.bundle_adjust_prefix),
      "Use the camera adjustment obtained by previously running bundle_adjust with this output prefix.")
     ("ref-map", po::value(&opt.ref_map)->default_value(""),
      "Read the projection and grid size from this mapprojected image.")
-    ("ot", po::value(&opt.output_type)->default_value("Float32"),
+    ("ot",  po::value(&opt.output_type)->default_value("Float32"), 
      "Output data type, when the input is single channel. Supported types: Byte, UInt16, "
      "Int16, UInt32, Int32, Float32. If the output type is a kind of integer, values are "
      "rounded and then clamped to the limits of that type. This option will be ignored for "
