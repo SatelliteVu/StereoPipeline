@@ -20,6 +20,7 @@
 #include <vw/FileIO/GdalWriteOptions.h>
 #include <vw/Cartography/CameraBBox.h>
 #include <vw/Cartography/GeoReferenceUtils.h>
+#include <fstream>
 
 namespace fs = boost::filesystem;
 
@@ -142,6 +143,41 @@ namespace asp
     }
 
     return results;
+  }
+
+  void queryPixelsToCSV(std::string const& dem_file,
+                        vw::CamPtr camera_model,
+                        std::vector<vw::Vector2> const& query_pixels,
+                        std::string const& output_file) {
+
+    // Get results for all pixels
+    std::vector<vw::Vector3> results = queryPixels(dem_file, camera_model, query_pixels);
+
+    // Write results to CSV file
+    std::ofstream csv_out(output_file.c_str());
+    csv_out.precision(12);  // High precision for coordinates
+    
+    // Write header
+    csv_out << "pixel_x,pixel_y,lon,lat,height_m\n";
+
+    // Write data for each pixel
+    for (size_t i = 0; i < query_pixels.size(); i++) {
+      csv_out << query_pixels[i][0] << "," 
+              << query_pixels[i][1] << ",";
+      
+      if (std::isnan(results[i][0])) {
+        // No intersection found
+        csv_out << "NA,NA,NA\n";
+      } else {
+        csv_out << results[i][0] << "," 
+                << results[i][1] << "," 
+                << results[i][2] << "\n";
+      }
+    }
+    csv_out.close();
+
+    vw::vw_out() << "Wrote " << query_pixels.size() 
+                 << " query results to: " << output_file << std::endl;
   }
 
   // Prepare a DEM file that encompasses a given image and with a given height.

@@ -47,6 +47,12 @@ namespace asp
   std::vector<vw::Vector3> queryPixels(std::string const &dem_file, vw::CamPtr camera_model,
                                        const std::vector<vw::Vector2> &query_pixels);
 
+  // Query multiple pixels and write results to CSV file
+  void queryPixelsToCSV(std::string const& dem_file, 
+                        vw::CamPtr camera_model,
+                        std::vector<vw::Vector2> const& query_pixels,
+                        std::string const& output_file);
+
   // Prepare a DEM file that encompasses a given image and with a given height,
   // or reuse the one already available if agrees with what is intended.
   void setupOrCheckDem(vw::GdalWriteOptions const &options,

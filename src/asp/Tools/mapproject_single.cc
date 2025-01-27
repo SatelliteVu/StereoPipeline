@@ -30,10 +30,12 @@
 #include <asp/Camera/MapprojectImage.h>
 #include <asp/Sessions/CameraUtils.h>
 #include <asp/Core/DemUtils.h>
+#include <asp/Core/CartographyUtils.h>
 
 #include <vw/Cartography/CameraBBox.h>
 #include <vw/Cartography/DatumUtils.h>
 #include <vw/Camera/PinholeModel.h>
+#include <vw/Cartography/PointImageManipulation.h>
 
 using namespace vw;
 using namespace vw::cartography;
@@ -47,44 +49,50 @@ void handle_arguments(int argc, char *argv[], asp::MapprojOptions& opt) {
   po::options_description general_options("");
   double NaN = std::numeric_limits<double>::quiet_NaN();
   general_options.add_options()
-    ("nodata-value",     po::value(&opt.nodata_value)->default_value(-32768),
+    ("nodata-value", po::value(&opt.nodata_value)->default_value(-32768),
      "No-data value to use unless specified in the input image.")
-    ("t_srs",            po::value(&opt.target_srs_string)->default_value(""),
+    ("t_srs", po::value(&opt.target_srs_string)->default_value(""),
      "Specify the output projection as a GDAL projection string (WKT, GeoJSON, or PROJ). If not provided, use the one from the DEM.")
-    ("tr",              po::value(&opt.tr)->default_value(NaN),
+    ("tr", po::value(&opt.tr)->default_value(NaN),
      "Set the output file resolution (ground sample distance) in target "
      "georeferenced units per pixel. This may be in degrees or meters, "
      "depending on your projection. The center of each output pixel "
      "will be at integer multiples of this grid size (hence the output "
      "image will extend for an additional half a pixel at each edge).")
-    ("mpp",              po::value(&opt.mpp)->default_value(NaN),
+    ("mpp", po::value(&opt.mpp)->default_value(NaN),
      "Set the output file resolution in meters per pixel.")
-    ("ppd",              po::value(&opt.ppd)->default_value(NaN),
+    ("ppd", po::value(&opt.ppd)->default_value(NaN),
      "Set the output file resolution in pixels per degree.")
-    ("datum-offset",     po::value(&opt.datum_offset)->default_value(0),
+    ("datum-offset", po::value(&opt.datum_offset)->default_value(0),
      "When projecting to a datum instead of a DEM, use this elevation in meters from the datum.")
     ("query-projection", po::bool_switch(&opt.isQuery)->default_value(false),
      "Display the computed projection information and estimated ground sample distance (pixel size on the ground), and quit. Used by the mapproject script.")
-    ("session-type,t",      po::value(&opt.stereo_session),
+    ("session-type,t", po::value(&opt.stereo_session),
      "Select the stereo session type to use for processing. Usually the program can select this automatically by the file extension, except for xml cameras. See the doc for options.")
-    ("t_projwin",        po::value(&opt.target_projwin),
-     "Limit the map-projected image to this region, with the corners given in georeferenced coordinates (xmin ymin xmax ymax). Max is exclusive.")
-    ("t_pixelwin",       po::value(&opt.target_pixelwin),
-     "Limit the map-projected image to this region, with the corners given in pixels (xmin ymin xmax ymax). Max is exclusive.")
+    ("t_projwin", po::value(&opt.target_projwin),
+     "Limit the mapprojected image to this region, with the corners given in georeferenced coordinates (xmin ymin xmax ymax). Max is exclusive.")
+    ("t_pixelwin", po::value(&opt.target_pixelwin),
+     "Limit the mapprojected image to this region, with the corners given in pixels (xmin ymin xmax ymax). Max is exclusive.")
     ("bundle-adjust-prefix", po::value(&opt.bundle_adjust_prefix),
      "Use the camera adjustment obtained by previously running bundle_adjust with this output prefix.")
-    ("ot",  po::value(&opt.output_type)->default_value("Float32"), "Output data type, when the input is single channel. Supported types: Byte, UInt16, Int16, UInt32, Int32, Float32. If the output type is a kind of integer, values are rounded and then clamped to the limits of that type. This option will be ignored for multi-channel images, when the output type is set to be the same as the input type.")
+    ("ref-map", po::value(&opt.ref_map)->default_value(""),
+     "Read the projection and grid size from this mapprojected image.")
+    ("ot", po::value(&opt.output_type)->default_value("Float32"),
+     "Output data type, when the input is single channel. Supported types: Byte, UInt16, "
+     "Int16, UInt32, Int32, Float32. If the output type is a kind of integer, values are "
+     "rounded and then clamped to the limits of that type. This option will be ignored for "
+     "multi-channel images, when the output type is set to be the same as the input type.")
     ("nearest-neighbor", po::bool_switch(&opt.nearest_neighbor)->default_value(false),
      "Use nearest neighbor interpolation.  Useful for classification images.")
-    ("mo",  po::value(&opt.metadata)->default_value(""), "Write metadata to the output file. Provide as a string in quotes if more than one item, separated by a space, such as 'VAR1=VALUE1 VAR2=VALUE2'. Neither the variable names nor the values should contain spaces.")
+    ("mo", po::value(&opt.metadata)->default_value(""),
+     "Write metadata to the output file. Provide as a string in quotes if more than one item, separated by a space, such as 'VAR1=VALUE1 VAR2=VALUE2'. Neither the variable names nor the values should contain spaces.")
     ("no-geoheader-info", po::bool_switch(&opt.noGeoHeaderInfo)->default_value(false),
      "Do not write metadata information in the geoheader. See the doc for more info.")
     ("query-pixel", po::value(&opt.query_pixel)->default_value(vw::Vector2(NaN, NaN)),
      "Trace a ray from this input image pixel (values start from 0) to the ground. "
      "Print the intersection point with the DEM as lon, lat, height, then "
      "as DEM column, row, height. Quit afterwards.")
-    ("aster-use-csm", 
-     po::bool_switch(&opt.aster_use_csm)->default_value(false)->implicit_value(true),
+    ("aster-use-csm", po::bool_switch(&opt.aster_use_csm)->default_value(false)->implicit_value(true),
      "Use the CSM model with ASTER cameras (-t aster).")
     ("parse-options", po::bool_switch(&opt.parseOptions)->default_value(false),
      "Parse the options and print the results. Used by the mapproject script.")
@@ -92,7 +100,9 @@ void handle_arguments(int argc, char *argv[], asp::MapprojOptions& opt) {
      "Trace rays from these input image pixels (values start from 0) to the ground. "
      "Print the intersection points with the DEM as lon, lat, height, then "
      "as DEM column, row, height. Quit afterwards.")
-    ;
+    ("query-pixels-output", po::value(&opt.query_pixels_output)->default_value("query_pixels_output.csv"),
+     "Output CSV file for storing the query pixels results.");
+
   general_options.add(vw::GdalWriteOptionsDescription(opt));
   
   po::options_description positional("");
@@ -158,7 +168,25 @@ void handle_arguments(int argc, char *argv[], asp::MapprojOptions& opt) {
   // in the stereo session.
   asp::stereo_settings().bundle_adjust_prefix = opt.bundle_adjust_prefix;
   asp::stereo_settings().aster_use_csm = opt.aster_use_csm;
-  
+
+  if (!opt.ref_map.empty()) {
+    // Ensure that --ref-map and --t_srs are not both set
+    if (!opt.target_srs_string.empty())
+      vw_throw(ArgumentErr() << "Cannot specify both --ref-map and --t_srs.\n");
+    if (!std::isnan(opt.tr))
+      vw_throw(ArgumentErr() << "Cannot specify both --ref-map and --tr.\n");
+
+    // Read the georeference from the reference map and get its wkt
+    GeoReference ref_map_georef;
+    bool has_georef = vw::cartography::read_georeference(ref_map_georef, opt.ref_map);
+    if (!has_georef)
+      vw_throw(ArgumentErr() << "The reference map has no georeference.\n");
+    opt.target_srs_string = ref_map_georef.get_wkt();
+    
+    // Set opt.tr
+    opt.tr = ref_map_georef.transform()(0, 0);
+  }
+
   if (fs::path(opt.dem_file).extension() != "") {
     // A path to a real DEM file was provided, load it!
     GeoReference dem_georef;
@@ -248,8 +276,8 @@ void calc_target_geom(// Inputs
                       Vector2i const& image_size,
                       boost::shared_ptr<camera::CameraModel> const& camera_model,
                       ImageViewRef<DemPixelT> const& dem,
-                      GeoReference const& dem_georef, 
-                      bool datum_dem,
+                      GeoReference const& dem_georef,
+                      bool proj_on_datum,
                       asp::MapprojOptions const & opt,
                       // Outputs
                       BBox2 & cam_box, GeoReference & target_georef) {
@@ -262,7 +290,7 @@ void calc_target_geom(// Inputs
   // - This call WILL intersect pixels outside the dem valid area!
   // - TODO: Modify this function to optionally disable intersection outside the DEM
   float auto_res = -1.0;  // will be updated
-  bool quick = datum_dem; // The non-quick option does not make sense with huge DEMs.
+  bool quick = proj_on_datum; // Quick mode when no actual DEM
   try {
     cam_box = camera_bbox(dem, dem_georef, target_georef, camera_model,
                           image_size.x(), image_size.y(), auto_res, quick);
@@ -355,6 +383,31 @@ void calc_target_geom(// Inputs
   return;
 }
 
+// Automatic projection determination
+void calcAutoProj(GeoReference const& dem_georef,
+                  vw::CamPtr camera_model,
+                  Vector2i const& image_size,
+                  bool proj_on_datum,
+                  vw::ImageViewRef<DemPixelT> const& dem,
+                  GeoReference& target_georef) {
+
+  float auto_res = false; 
+  bool quick = proj_on_datum; // Quick mode when no actual DEM
+  std::vector<vw::Vector3> *coords = NULL;
+  int num_samples = 100; // enough for projection center determination
+  BBox2 cam_box = camera_bbox(dem, dem_georef, target_georef, camera_model,
+                    image_size.x(), image_size.y(), auto_res, quick, coords, num_samples);
+  
+  BBox2 ll_box = target_georef.point_to_lonlat_bbox(cam_box);
+  if (ll_box.empty())
+    vw_throw(ArgumentErr() << "Failed to determine the output projection.\n");
+
+  // The projection center is the box center
+  vw::Vector2 lonlat_ctr = (ll_box.min() + ll_box.max()) / 2.0;
+
+  asp::setAutoProj(lonlat_ctr.y(), lonlat_ctr.x(), target_georef);
+}                               
+
 int main(int argc, char* argv[]) {
 
   asp::MapprojOptions opt;
@@ -368,7 +421,7 @@ int main(int argc, char* argv[]) {
     // are the same, because we want to take advantage of the stereo
     // pipeline's ability to generate camera models for various
     // missions.  Hence, we create two identical camera models, but only one is used.
-        asp::SessionPtr session(asp::StereoSessionFactory::create
+    asp::SessionPtr session(asp::StereoSessionFactory::create
                        (opt.stereo_session, // in-out
                         opt,
                         opt.image_file, opt.image_file, // The same file is passed in twice
@@ -383,7 +436,7 @@ int main(int argc, char* argv[]) {
     // Additional checks once the stereo session is determined.
     
     if (opt.stereo_session == "perusat")
-      vw_out(WarningMessage) << "Images map-projected using the '" << opt.stereo_session
+      vw_out(WarningMessage) << "Images mapprojected using the '" << opt.stereo_session
                              << "' camera model cannot be used later for stereo. "
                              << "If that is desired, please run mapproject with "
                              << "'-t rpc' and a camera file having an RPC model.\n";
@@ -419,14 +472,13 @@ int main(int argc, char* argv[]) {
 
     // If the query pixels option was set, run the queries and exit
     if (!opt.query_pixels.empty()) {
-      for (const auto& pixel : opt.query_pixels) {
-        asp::queryPixel(opt.dem_file, opt.camera_model, pixel);
-      }
+      asp::queryPixelsToCSV(opt.dem_file, opt.camera_model, 
+                            opt.query_pixels, opt.query_pixels_output);
       return 0;
     }
 
     // Load the DEM
-    bool datum_dem = false;
+    bool proj_on_datum = false;
     GeoReference dem_georef;
     ImageViewRef<DemPixelT> dem;
     if (fs::path(opt.dem_file).extension() != "") {
@@ -448,7 +500,7 @@ int main(int argc, char* argv[]) {
       }      
     } else {
       // Projecting to a datum instead of a DEM
-      datum_dem = true;
+      proj_on_datum = true;
       std::string datum_name = opt.dem_file;
 
       // Use the camera center to determine whether to center the fake DEM on 0 or 180.
@@ -468,11 +520,18 @@ int main(int argc, char* argv[]) {
     }
     // Finished setting up the datum
 
+    Vector2i image_size = vw::file_image_size(opt.image_file);
+
     // Read projection. Work out output bounding box in points using original camera model.
     GeoReference target_georef = dem_georef;
 
-    // User specified the proj4 string for the output georeference
-    if (opt.target_srs_string != "") {
+    if ((opt.target_srs_string.empty() && !target_georef.is_projected()) ||
+        boost::to_lower_copy(opt.target_srs_string) == "auto") {
+       // Automatic projection determination
+       calcAutoProj(dem_georef, opt.camera_model, image_size, proj_on_datum, dem, 
+                    target_georef); // output
+    } else if (!opt.target_srs_string.empty()) {
+      // Use specified proj4 string for the output georeference
       bool have_user_datum = false;
       Datum user_datum;
       asp::set_srs_string(opt.target_srs_string, have_user_datum, user_datum,
@@ -508,13 +567,12 @@ int main(int argc, char* argv[]) {
     
     bool user_provided_resolution = (!std::isnan(opt.ppd));
     bool     calc_target_res = !user_provided_resolution;
-    Vector2i image_size      = vw::file_image_size(opt.image_file);
     BBox2    cam_box;
     calc_target_geom(// Inputs
                      calc_target_res, image_size, opt.camera_model,
-                     dem, dem_georef, datum_dem,
+                     dem, dem_georef, proj_on_datum, opt,
                      // Outputs
-                     opt, cam_box, target_georef);
+                     cam_box, target_georef);
 
     // Set a high precision, as the numbers can come out big for UTM
     vw_out() << std::setprecision(17) << "Projected space bounding box: " << cam_box << std::endl;
