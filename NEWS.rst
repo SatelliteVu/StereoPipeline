@@ -47,6 +47,8 @@ image_calc (:numref:`image_calc`):
 sat_sim (:numref:`sat_sim`):
   * Added the option ``--rig-sensor-rotation-angles``, to be able to produce
     a rig to desired specifications (:numref:`sat_sim_rig_adjust`).
+  * Can apply a perturbation to given cameras (:numref:`sat_sim_perturb`).
+
   * Added the option ``--blur-sigma``, to blur the simulated images. This can
     help simulate the effect of degraded images due to fog, motion, etc.
   
@@ -61,6 +63,8 @@ parallel_stereo (:numref:`parallel_stereo`):
   * It is possible to mapproject either with ``dg`` or ``rpc`` cameras
     when using mapprojected images in stereo with DigitalGlobe / Maxar
     cameras (:numref:`dg-mapproj`).
+  * Enable stereo with vendor-supplied images that have been mapprojected onto
+    surfaces of constant height above a datum (:numref:`mapproj_ortho`).
   * Added the option ``--band`` to process a given band (channel) from
     multispectral images (:numref:`stereodefault`).  
   * Skip tiles for which there is no valid low-resolution disparity.
@@ -72,8 +76,6 @@ parallel_stereo (:numref:`parallel_stereo`):
     ``--enable-velocity-aberration-correction`` for Pleiades linescan cameras
     (these are enabled by default for WorldView cameras only). It is not clear
     if these corrections improve or not Pleiades accuracy.
-  * Enable stereo with vendor-supplied images that have been mapprojected onto
-    surfaces of constant height above a datum (:numref:`mapproj_ortho`).
 
 sfm (:numref:`sfm`):
   * Added an example for processing data acquired with an UAS, with known
@@ -165,6 +167,8 @@ misc:
   * Wiped extremely old and unused SPICE logic.
   * Wiped the unused old option ``--mask-flatfield``. Can use with stereo
     the option ``--nodata-value`` to mask values no more than this value.
+  * The ``geodiff`` program output image is with float pixels, rather than
+    in double precision.
 
 RELEASE 3.4.0, June 19, 2024
 ----------------------------
