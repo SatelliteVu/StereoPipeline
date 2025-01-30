@@ -630,6 +630,11 @@ vw::Vector3 calcJitterAmplitude(SatSimOptions const& opt,
                                 vw::Vector3   const& curr_proj, // curr proj camera pos
                                 double signed_dist) { // distance from ref_proj
 
+  // Seed the random number generator. This will be reproducible each time the
+  // program is run, but will be different for each set of input cameras.
+  if (opt.random_pose_perturbation)
+    srand(vw::math::norm_2(curr_proj));
+  
   double height_above_datum = curr_proj[2]; // curr satellite height
   vw::Vector3 amp(0, 0, 0);
 
@@ -657,8 +662,12 @@ vw::Vector3 calcJitterAmplitude(SatSimOptions const& opt,
         a = a * 180.0 / M_PI;
       }
       
-      // Compute the jitter, in degrees. Add the phase.
-      amp[c] += a * sin(signed_dist * 2.0 * M_PI / T + opt.jitter_phase[index]);
+      // Compute the jitter, in degrees. Add the phase. For a random perturbation
+      // make it between -a and a.
+      if (!opt.random_pose_perturbation)
+        amp[c] += a * sin(signed_dist * 2.0 * M_PI / T + opt.jitter_phase[index]);
+      else 
+        amp[c] += a * (2 * double(rand())/double(RAND_MAX) - 1.0);
     }
 
   } // End loop through frequencies
@@ -1140,7 +1149,9 @@ void perturbCameras(SatSimOptions const& opt,
       orbitLen += calcOrbitLength(prev_proj_ctr, curr_proj_ctr, georef);
     
     // Jitter amplitude at the current location
-    vw::Vector3 jitter_amp = calcJitterAmplitude(opt, curr_proj_ctr, orbitLen);
+    vw::Vector3 jitter_amp(0, 0, 0);
+    if (std::isnan(opt.random_position_perturbation))
+      jitter_amp = calcJitterAmplitude(opt, curr_proj_ctr, orbitLen);
 
     // The jitter vibration is applied to the camera in the satellite frame
     vw::Matrix3x3 R_rpy = asp::rollPitchYaw(jitter_amp[0], jitter_amp[1], jitter_amp[2]);
@@ -1149,10 +1160,39 @@ void perturbCameras(SatSimOptions const& opt,
     // Replace the camera rotation
     pin->set_camera_pose(cam2world);
     
+    if (!std::isnan(opt.random_position_perturbation)) {
+      // Seed the random number generator to ensure being in a different location
+      // in orbit results in a different perturbation for same camera index.
+      srand(vw::math::norm_2(curr_proj_ctr));
+      vw::Vector3 perturbation;
+      for (int c = 0; c < 3; c++)
+        perturbation[c] = (2 * double(rand())/double(RAND_MAX) - 1.0) 
+                          * opt.random_position_perturbation;
+      
+      pin->set_camera_center(cam_ctr + perturbation);
+    }
+    
     // Will save the camera with the output prefix
     std::string camName = opt.out_prefix + "-" + fs::path(cam_names[i]).filename().string();
-    vw::vw_out() << "Writing: " << camName << "\n";
-    pin->write(camName);
+    
+    if (!opt.save_as_csm) {
+      // Save the camera as pinhole
+      vw::vw_out() << "Writing: " << camName << "\n";
+      pin->write(camName);
+    } else {
+      // Save as CSM
+      asp::CsmModel * csmPtr = new asp::CsmModel;
+      vw::cartography::Datum d = georef.datum();
+      csmPtr->createFrameModel(*pin,
+                               opt.image_size[0], opt.image_size[1],
+                               d.semi_major_axis(), d.semi_minor_axis());
+      cams[i] = vw::CamPtr(csmPtr); // will own this pointer
+      
+      // Replace extension with .json
+      camName = fs::path(camName).replace_extension(".json").string();
+      vw::vw_out() << "Writing: " << camName << "\n";
+      csmPtr->saveState(camName);
+    }
  
     out_cam_names[i] = camName;
     

@@ -556,8 +556,9 @@ name being ``my_cam``.
 Perturbing existing cameras
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This program can apply a jitter perturbation (:numref:`sat_sim_jitter_model`)
-to a sequence of given Pinhole cameras (:numref:`pinholemodels`).
+This program can apply a periodic jitter perturbation
+(:numref:`sat_sim_jitter_model`) or a random position or pose perturbation to a
+sequence of given Pinhole cameras (:numref:`pinholemodels`).
 
 If more than one sequence is present, such as nadir-looking and forward-looking
 cameras, ``sat_sim`` should be called separately for each one.
@@ -583,6 +584,20 @@ If an input image is named ``camDir/camName.tsai`` and the output prefix is
 The list of written cameras is saved in a file named ``run/run-cameras.txt``.
 That list can be passed to ``bundle_adjust`` (:numref:`bundle_adjust`) and
 ``jitter_solve`` (:numref:`jitter_solve`).
+
+To save the perturbed cameras in CSM model state format, add the option
+``--save-as-csm`` and specify the image dimensions (``--image-size``).
+
+To apply a random pose perturbation with maximum roll-pitch-yaw amplitude given by 
+``--horizontal-uncertainty``, run::
+
+    sat_sim                            \
+      --random-pose-perturbation       \
+      --dem dem.tif                    \
+      --horizontal-uncertainty '0 2 0' \
+      -o run/run
+
+To apply a random position perturbation, use an option such as ``--random-position-perturbation 2.0``.
 
 .. _roll_pitch_yaw_def:
 
@@ -886,8 +901,18 @@ Command-line options
     (millions), may result in numerical issues. See :numref:`sat_sim_time`.
 
 --perturb-cameras
-    Apply a perturbation to existing cameras (:numref:`sat_sim_perturb`).
+    Apply a periodic jitter perturbation to poses of existing cameras
+    (:numref:`sat_sim_perturb`).
 
+--random-pose-perturbation
+    Apply a random pose perturbation to existing cameras, with the amplitude
+    specified by ``--horizontal-uncertainty``  (:numref:`sat_sim_perturb`).
+    Repeated invocation will produce the same random perturbation.
+
+--random-position-perturbation <double (default: NaN)>
+    Apply a random position perturbation to existing cameras, with the amplitude
+    specified by the given value, in meters (:numref:`sat_sim_perturb`).    
+    
 --blur-sigma <double (default: 0.0)>
     When creating images, blur them with a Gaussian with this sigma. The sigma is
     in input orthoimage pixel units.

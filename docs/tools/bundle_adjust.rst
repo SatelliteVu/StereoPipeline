@@ -304,7 +304,7 @@ camera. See :numref:`ba_options` for usage.
 
 When using hard constraints in bundle adjustment, caution should be exercised as
 they can impact the optimization process. It is not recommended to set
-uncertainties below 0.2 meters, as this may result in slow convergence or even
+uncertainties below 1 meter, as this may result in slow convergence or even
 failure to converge. It is better be generous with the uncertainties in either
 case.
 
@@ -1266,6 +1266,10 @@ Command-line options
 --heights-from-dem-uncertainty <double (default: 10.0)>
     The DEM uncertainty (1 sigma, in meters). A smaller value constrains more the
     triangulated points to the DEM specified via ``--heights-from-dem``.
+    The discrepancy between a triangulated point and corresponding point on the 
+    DEM is divided by this uncertainty to make it dimensionless, before being
+    added to the cost function (:numref:`how_ba_works`). See also 
+    ``--heights-from-dem-robust-threshold``.
 
 --heights-from-dem-robust-threshold <double (default: 0.1)> 
     The robust threshold to use keep the triangulated points close to the DEM if
@@ -1539,6 +1543,9 @@ Command-line options
     deterministic (starting with FLANN 1.9.2). The default (``auto``) is to use
     ``kmeans`` for 25,000 features or less and ``kdtree`` otherwise. This does
     not apply to ORB feature matching.
+
+--ip-nodata-radius <integer (default: 4)>
+    Remove IP near nodata with this radius, in pixels.
 
 --save-vwip
     Save .vwip files (intermediate files for creating .match

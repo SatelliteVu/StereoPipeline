@@ -47,7 +47,8 @@ image_calc (:numref:`image_calc`):
 sat_sim (:numref:`sat_sim`):
   * Added the option ``--rig-sensor-rotation-angles``, to be able to produce
     a rig to desired specifications (:numref:`sat_sim_rig_adjust`).
-  * Can apply a perturbation to given cameras (:numref:`sat_sim_perturb`).
+  * Can apply a periodic or random perturbation to given cameras
+    (:numref:`sat_sim_perturb`).
 
   * Added the option ``--blur-sigma``, to blur the simulated images. This can
     help simulate the effect of degraded images due to fog, motion, etc.
@@ -140,6 +141,7 @@ dem_mosaic (:numref:`dem_mosaic`):
     (:numref:`dem_mosaic_external_weights`).
   * Renamed the option ``--dem-list-file`` to ``--dem-list``. The old option
     is kept for backward compatibility.
+  * Can handle DEMs with NaN values.
 
 misc:
   * In ``bundle_adjust`` and ``jitter_solve``, save the lists of images and
